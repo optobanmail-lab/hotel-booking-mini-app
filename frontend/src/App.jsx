@@ -15,28 +15,24 @@ export default function App() {
     return (
         <Routes>
             <Route element={<AppLayout />}>
-                {/* стартовая */}
-                <Route path="/" element={<Navigate to="/home" replace />} />
+                {/* Home делаем на / */}
+                <Route path="/" element={<HomeNewsPage />} />
+                {/* /home оставляем как алиас */}
+                <Route path="/home" element={<Navigate to="/" replace />} />
 
-                {/* новости */}
-                <Route path="/home" element={<HomeNewsPage />} />
-
-                {/* отели */}
                 <Route path="/catalog" element={<CatalogPage />} />
                 <Route path="/search" element={<SearchPage />} />
                 <Route path="/hotels/:id" element={<HotelDetailsPage />} />
 
-                {/* бронирования */}
                 <Route path="/booking/new" element={<BookingPage />} />
                 <Route path="/bookings/:id/confirmed" element={<BookingConfirmedPage />} />
                 <Route path="/bookings" element={<MyBookingsPage />} />
 
-                {/* профиль/админ */}
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/admin" element={<AdminPage />} />
 
-                {/* всё неизвестное -> home */}
-                <Route path="*" element={<Navigate to="/home" replace />} />
+                {/* всё неизвестное -> / */}
+                <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
         </Routes>
     )
