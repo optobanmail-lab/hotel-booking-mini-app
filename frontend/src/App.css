@@ -182,3 +182,15 @@
     border-right-color: var(--border);
   }
 }
+
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+#root {
+  min-height: 100dvh;
+  /* safe-area для iOS (челка) */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}

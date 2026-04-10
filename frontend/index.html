@@ -3,10 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- важно для корректного поведения на iOS и safe-area -->
+  <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+  />
+
   <title>Hotel Booking</title>
 
-  <!-- Telegram WebApp SDK (нужно для window.Telegram.WebApp) -->
+  <!-- Telegram WebApp SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
