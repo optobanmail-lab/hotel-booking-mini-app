@@ -16,9 +16,14 @@ app.include_router(news_router, prefix="/api")
 
 origins = [o.strip() for o in (settings.cors_origins or "").split(",") if o.strip()]
 
+origins = [
+    "http://localhost:5173",          # Для локальной разработки (Vite)
+    "https://hotel-booking-mini-app.pages.dev/",  # Ссылка на твой фронт в Cloudflare
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins or ["http://localhost:5173"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
