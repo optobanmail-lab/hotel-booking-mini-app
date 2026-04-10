@@ -1,4 +1,4 @@
-import { Paper, BottomNavigation, BottomNavigationAction, Box } from '@mui/material'
+import { Paper, Box, ButtonBase, Portal } from '@mui/material'
 import HomeRoundedIcon from '@mui/icons-material/HomeRounded'
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded'
 import BookmarkRoundedIcon from '@mui/icons-material/BookmarkRounded'
@@ -17,6 +17,7 @@ const barSx = {
     bgcolor: 'rgba(255,255,255,0.92)',
     backdropFilter: 'blur(10px)',
     WebkitBackdropFilter: 'blur(10px)',
+    zIndex: 1300,
 }
 
 function NavIcon({ selected, children }) {
@@ -30,7 +31,7 @@ function NavIcon({ selected, children }) {
                 placeItems: 'center',
                 bgcolor: selected ? 'primary.main' : 'transparent',
                 color: selected ? '#fff' : 'rgba(16,24,40,0.55)',
-                transition: 'all .18s ease',
+                transition: 'background-color .18s ease, color .18s ease',
             }}
         >
             {children}
@@ -43,37 +44,46 @@ export default function BottomBar() {
     const navigate = useNavigate()
 
     const tabs = [
-        // Home теперь ведёт на новости
         { path: '/home', icon: (sel) => <NavIcon selected={sel}><HomeRoundedIcon /></NavIcon> },
         { path: '/search', icon: (sel) => <NavIcon selected={sel}><SearchRoundedIcon /></NavIcon> },
         { path: '/bookings', icon: (sel) => <NavIcon selected={sel}><BookmarkRoundedIcon /></NavIcon> },
         { path: '/profile', icon: (sel) => <NavIcon selected={sel}><PersonRoundedIcon /></NavIcon> },
     ]
 
-    // аккуратная подсветка активной вкладки
     const pathname = location.pathname
     const value =
         pathname.startsWith('/search') ? 1
             : pathname.startsWith('/bookings') ? 2
                 : pathname.startsWith('/profile') ? 3
-                    : 0 // всё остальное (home, catalog, details) считаем "Home"
+                    : 0
 
     return (
-        <Paper elevation={0} sx={barSx}>
-            <BottomNavigation
-                showLabels={false}
-                value={value}
-                onChange={(_, idx) => navigate(tabs[idx].path)}
-                sx={{
-                    bgcolor: 'transparent',
-                    height: 64,
-                    '& .MuiBottomNavigationAction-root': { minWidth: 0, py: 0 },
-                }}
-            >
-                {tabs.map((t, i) => (
-                    <BottomNavigationAction key={t.path} icon={t.icon(i === value)} />
-                ))}
-            </BottomNavigation>
-        </Paper>
+        <Portal>
+            <Paper elevation={0} sx={barSx}>
+                <Box sx={{ display: 'flex', height: 64, bgcolor: 'transparent' }}>
+                    {tabs.map((t, i) => {
+                        const selected = i === value
+
+                        return (
+                            <ButtonBase
+                                key={t.path}
+                                onClick={() => navigate(t.path)}
+                                disableRipple
+                                sx={{
+                                    flex: 1,
+                                    height: '100%',
+                                    display: 'grid',
+                                    placeItems: 'center',
+                                    // фиксируем отсутствие каких-либо “подпрыгиваний”
+                                    padding: 0,
+                                }}
+                            >
+                                {t.icon(selected)}
+                            </ButtonBase>
+                        )
+                    })}
+                </Box>
+            </Paper>
+        </Portal>
     )
 }

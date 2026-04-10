@@ -1,34 +1,37 @@
 import { motion, useReducedMotion } from 'framer-motion'
 
-export default function PageTransition({ children, direction = 1 }) {
+const easeOut = [0.22, 1, 0.36, 1]   // мягко и быстро
+const easeIn = [0.4, 0, 1, 1]
+
+export default function PageTransition({ children }) {
     const reduce = useReducedMotion()
 
+    // Минимальная “дорогая” анимация: fade + лёгкий подъём/опускание.
+    // Без scale и без spring — именно они чаще всего дают “дёрганье”.
     const variants = {
-        initial: (dir) => ({
-            x: reduce ? 0 : (dir > 0 ? 26 : -18),
+        initial: {
             opacity: 0,
-            scale: reduce ? 1 : 0.995,
-        }),
+            y: reduce ? 0 : 8,
+        },
         animate: {
-            x: 0,
             opacity: 1,
-            scale: 1,
+            y: 0,
             transition: reduce
                 ? { duration: 0.12 }
-                : { type: 'spring', stiffness: 420, damping: 38, mass: 0.9 },
+                : { duration: 0.22, ease: easeOut },
         },
-        exit: (dir) => ({
-            x: reduce ? 0 : (dir > 0 ? -14 : 20),
+        exit: {
             opacity: 0,
-            scale: reduce ? 1 : 0.995,
-            transition: { duration: 0.16, ease: 'easeOut' },
-        }),
+            y: reduce ? 0 : -6,
+            transition: reduce
+                ? { duration: 0.1 }
+                : { duration: 0.16, ease: easeIn },
+        },
     }
 
     return (
         <motion.div
-            style={{ width: '100%' }}
-            custom={direction}
+            style={{ width: '100%', willChange: 'transform, opacity' }}
             variants={variants}
             initial="initial"
             animate="animate"
