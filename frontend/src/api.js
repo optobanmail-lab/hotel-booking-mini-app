@@ -1,13 +1,41 @@
 import axios from 'axios'
 
+const API_BASE = import.meta.env.VITE_API_BASE ?? ''
+
 export const api = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE ?? '',
+    baseURL: API_BASE,
 })
 
-function telegramId() {
-    // пока dev, позже заменим на Telegram initData
-    return Number(localStorage.getItem('tg_id') || 1)
+function tgWebApp() {
+    return window.Telegram?.WebApp
 }
+
+export function telegramUserId() {
+    const id = tgWebApp()?.initDataUnsafe?.user?.id
+    if (id) return Number(id)
+
+    // fallback для разработки в обычном браузере
+    const dev = localStorage.getItem('tg_id')
+    return dev ? Number(dev) : null
+}
+
+export function telegramInitData() {
+    return tgWebApp()?.initData ?? ''
+}
+
+// Автоматически добавляем заголовки на каждый запрос
+api.interceptors.request.use((config) => {
+    const headers = config.headers ?? {}
+
+    const initData = telegramInitData()
+    if (initData) headers['X-Telegram-Init-Data'] = initData
+
+    const uid = telegramUserId()
+    if (uid != null) headers['X-Telegram-Id'] = uid
+
+    config.headers = headers
+    return config
+})
 
 export async function getHotels(city) {
     const res = await api.get('/api/hotels', { params: { city: city ?? '' } })
@@ -20,23 +48,17 @@ export async function getHotel(id) {
 }
 
 export async function createBooking(payload) {
-    const res = await api.post('/api/bookings', payload, {
-        headers: { 'X-Telegram-Id': telegramId() },
-    })
+    const res = await api.post('/api/bookings', payload)
     return res.data
 }
 
 export async function myBookings() {
-    const res = await api.get('/api/bookings/my', {
-        headers: { 'X-Telegram-Id': telegramId() },
-    })
+    const res = await api.get('/api/bookings/my')
     return res.data
 }
 
 export async function cancelBooking(id) {
-    const res = await api.post(`/api/bookings/${id}/cancel`, null, {
-        headers: { 'X-Telegram-Id': telegramId() },
-    })
+    const res = await api.post(`/api/bookings/${id}/cancel`, null)
     return res.data
 }
 
