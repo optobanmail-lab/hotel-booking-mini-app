@@ -1,7 +1,9 @@
+import { Routes, Route } from 'react-router-dom'
+
 export default function App() {
     return (
-        <div style={{ padding: 16, fontFamily: 'sans-serif' }}>
-            OK BASE (no router/layout)
-        </div>
+        <Routes>
+            <Route path="*" element={<div style={{ padding: 16 }}>OK ROUTER</div>} />
+        </Routes>
     )
 }
