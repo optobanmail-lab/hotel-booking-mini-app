@@ -23,23 +23,22 @@ function Loading() {
     )
 }
 
-/**
- * На время отладки держи true.
- * Когда починишь причину краша — поставишь false и вернёшь HomeNewsPage на "/".
- */
+// Пока держим true, чтобы Telegram/мобилка не падали
 const USE_LITE_HOME = true
 
 export default function AppRoutes() {
+    const homeEl = USE_LITE_HOME ? <LitePage /> : <HomeNewsPage />
+
     return (
         <Suspense fallback={<Loading />}>
             <Routes>
                 <Route element={<AppLayout />}>
-                    {/* Debug routes */}
+                    {/* debug */}
                     <Route path="/lite" element={<LitePage />} />
 
                     {/* Домашняя */}
-                    <Route path="/" element={USE_LITE_HOME ? <LitePage /> : <HomeNewsPage />} />
-                    <Route path="/home" element={<HomeNewsPage />} />
+                    <Route path="/" element={homeEl} />
+                    <Route path="/home" element={homeEl} />
 
                     {/* Отели */}
                     <Route path="/catalog" element={<CatalogPage />} />
