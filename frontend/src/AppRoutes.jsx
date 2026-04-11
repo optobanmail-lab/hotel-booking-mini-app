@@ -10,14 +10,15 @@ import BookingConfirmedPage from './pages/BookingConfirmedPage'
 import MyBookingsPage from './pages/MyBookingsPage'
 import ProfilePage from './pages/ProfilePage'
 import AdminPage from './pages/AdminPage'
+import LitePage from './pages/LitePage'
 
 export default function AppRoutes() {
     return (
         <Routes>
             <Route element={<AppLayout />}>
                 {/* Домашняя */}
-                <Route path="/" element={<HomeNewsPage />} />
-                <Route path="/home" element={<HomeNewsPage />} />
+                <Route path="/" element={<LitePage />} />
+                <Route path="/home" element={<LitePage />} />
 
                 {/* Отели */}
                 <Route path="/catalog" element={<CatalogPage />} />

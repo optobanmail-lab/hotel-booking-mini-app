@@ -11,6 +11,7 @@ export default function AppLayout() {
             <Box sx={{ flex: 1, pb: isAdmin ? 0 : 11, overflowX: 'hidden' }}>
                 <Outlet />
             </Box>
+
             {!isAdmin && <BottomBar />}
         </Box>
     )
