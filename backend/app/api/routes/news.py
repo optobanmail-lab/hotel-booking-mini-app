@@ -1,96 +1,151 @@
-from fastapi import APIRouter
-import feedparser
+import asyncio
 import re
-import html
-import hashlib
-import urllib.parse
+import time
+from typing import Any, Dict, List, Optional
 
-router = APIRouter(prefix="/news", tags=["news"])
+import feedparser
+import httpx
+from fastapi import APIRouter, Query
+from fastapi.responses import JSONResponse
 
-RSS_SOURCES = [
-    "https://news.google.com/rss/search?q=отели+Казахстан&hl=ru&gl=KZ&ceid=KZ:ru",
-    "https://news.google.com/rss/search?q=гостиницы+Алматы&hl=ru&gl=KZ&ceid=KZ:ru",
-    "https://news.google.com/rss/search?q=туризм+Казахстан+отель&hl=ru&gl=KZ&ceid=KZ:ru",
-]
+router = APIRouter(tags=["news"])
 
-CITY_TAGS = {
-    "алматы": "almaty",
-    "астана": "astana",
-    "шымкент": "shymkent",
-    "караганда": "karaganda",
-    "актобе": "aktobe",
-    "атырау": "atyrau",
-}
+RSS_URL = (
+    "https://news.google.com/rss/search?"
+    "q=%D0%BE%D1%82%D0%B5%D0%BB%D0%B8%20%D0%9A%D0%B0%D0%B7%D0%B0%D1%85%D1%81%D1%82%D0%B0%D0%BD"
+    "&hl=ru&gl=KZ&ceid=KZ:ru"
+)
 
-def strip_html(s: str | None) -> str:
-    if not s:
-        return ""
-    s = html.unescape(s)                 # убираем &nbsp; и т.п.
-    s = re.sub(r"<[^>]+>", "", s)        # удаляем теги
-    s = re.sub(r"\s+", " ", s).strip()   # нормализуем пробелы
-    return s
+CACHE_TTL_SECONDS = 10 * 60  # обновлять раз в 10 минут
+_cache: Dict[str, Any] = {"expires_at": 0.0, "items": []}
 
-def seed_int(text: str) -> int:
-    h = hashlib.md5(text.encode("utf-8")).hexdigest()
-    return int(h[:8], 16)
 
-def build_image_url(title: str, url: str) -> str:
-    """
-    Уникальная картинка без API-ключа.
-    source.unsplash.com отдаёт разные фото за счёт sig.
-    """
-    t = (title or "").lower()
+def _strip_html(s: str) -> str:
+    return re.sub(r"<[^>]+>", "", s or "").strip()
 
-    # базовые теги "про отели"
-    tags = ["hotel", "kazakhstan", "travel", "room", "lobby"]
 
-    # если в заголовке есть город — добавим
-    for ru, en in CITY_TAGS.items():
-        if ru in t:
-            tags.insert(0, en)
-            break
+def _extract_image_from_entry(entry: Dict[str, Any]) -> Optional[str]:
+    media_content = entry.get("media_content") or []
+    if isinstance(media_content, list) and media_content:
+        url = (media_content[0] or {}).get("url")
+        if url:
+            return url
 
-    q = urllib.parse.quote(",".join(tags))
-    sig = seed_int(url) % 10_000_000
-    return f"https://source.unsplash.com/900x700/?{q}&sig={sig}"
+    media_thumb = entry.get("media_thumbnail") or []
+    if isinstance(media_thumb, list) and media_thumb:
+        url = (media_thumb[0] or {}).get("url")
+        if url:
+            return url
 
-@router.get("")
-def get_news(limit: int = 8):
-    limit = max(3, min(12, int(limit)))
+    links = entry.get("links") or []
+    for lk in links:
+        if (lk or {}).get("rel") == "enclosure" and str((lk or {}).get("type", "")).startswith("image/"):
+            href = (lk or {}).get("href")
+            if href:
+                return href
 
-    raw = []
-    for feed_url in RSS_SOURCES:
-        feed = feedparser.parse(feed_url)
-        for e in feed.entries:
-            title = getattr(e, "title", None)
-            link = getattr(e, "link", None)
-            if not title or not link:
-                continue
+    html = entry.get("summary") or entry.get("description") or ""
+    m = re.search(r'<img[^>]+src="([^"]+)"', html, re.IGNORECASE)
+    if m:
+        return m.group(1)
 
-            summary = strip_html(getattr(e, "summary", None))
-            published = getattr(e, "published", None) or getattr(e, "updated", None)
+    return None
 
-            # убрать дубли заголовка в summary
-            title_clean = strip_html(title)
-            if summary.lower().startswith(title_clean.lower()):
-                summary = summary[len(title_clean):].strip(" -:–—").strip()
 
-            raw.append({
-                "title": title_clean,
-                "url": link,
-                "summary": summary,
-                "published": published,
-                "source": "Google News",
-            })
+def _extract_og_image(html: str) -> Optional[str]:
+    m = re.search(
+        r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
+        html,
+        re.IGNORECASE,
+    )
+    if m:
+        return m.group(1)
 
-    # дедуп по url
-    seen = set()
-    uniq = []
-    for it in raw:
-        if it["url"] in seen:
-            continue
-        seen.add(it["url"])
-        it["image_url"] = build_image_url(it["title"], it["url"])
-        uniq.append(it)
+    m = re.search(
+        r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)["\']',
+        html,
+        re.IGNORECASE,
+    )
+    if m:
+        return m.group(1)
 
-    return uniq[:limit]
+    return None
+
+
+async def _fetch_og_image(url: str, client: httpx.AsyncClient, sem: asyncio.Semaphore) -> Optional[str]:
+    async with sem:
+        try:
+            r = await client.get(url, follow_redirects=True, timeout=6.0)
+            if r.status_code >= 400:
+                return None
+            return _extract_og_image(r.text)
+        except Exception:
+            return None
+
+
+async def _load_news(limit: int) -> List[Dict[str, Any]]:
+    limit = max(1, min(limit, 50))
+
+    async with httpx.AsyncClient(headers={"User-Agent": "Mozilla/5.0"}) as client:
+        rss_resp = await client.get(RSS_URL, timeout=10.0)
+        rss_resp.raise_for_status()
+
+        feed = feedparser.parse(rss_resp.text)
+        entries = feed.entries[:limit]
+
+        items: List[Dict[str, Any]] = []
+        for e in entries:
+            entry = dict(e)
+
+            link = entry.get("link") or ""
+            title = entry.get("title") or ""
+            summary = entry.get("summary") or entry.get("description") or ""
+            published = entry.get("published") or entry.get("updated") or ""
+
+            source = "Google News"
+            if isinstance(entry.get("source"), dict) and entry["source"].get("title"):
+                source = entry["source"]["title"]
+
+            image_url = _extract_image_from_entry(entry)
+
+            items.append(
+                {
+                    "title": title,
+                    "summary": _strip_html(summary),
+                    "published": published,
+                    "source": source,
+                    "url": link,        # важно: фронт уже ждёт n.url
+                    "image_url": image_url,  # может быть None
+                }
+            )
+
+        # Если картинок нет в RSS — пробуем og:image
+        sem = asyncio.Semaphore(5)  # ограничим параллельность
+        tasks = []
+        idxs = []
+        for i, it in enumerate(items):
+            if not it["image_url"] and it["url"]:
+                idxs.append(i)
+                tasks.append(_fetch_og_image(it["url"], client, sem))
+
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for i, res in zip(idxs, results):
+                if isinstance(res, str) and res:
+                    items[i]["image_url"] = res
+
+        return items
+
+
+@router.get("/news")
+async def news(limit: int = Query(8, ge=1, le=50)):
+    now = time.time()
+
+    if _cache["expires_at"] > now and _cache["items"]:
+        return JSONResponse(content=_cache["items"][:limit], headers={"Cache-Control": "no-store"})
+
+    items = await _load_news(limit)
+    _cache["items"] = items
+    _cache["expires_at"] = now + CACHE_TTL_SECONDS
+
+    return JSONResponse(content=items[:limit], headers={"Cache-Control": "no-store"})
