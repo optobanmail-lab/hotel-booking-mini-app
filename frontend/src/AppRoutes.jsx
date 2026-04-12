@@ -30,6 +30,11 @@ export default function AppRoutes() {
                 <Route path="/test/bookings" element={<MyBookingsPage />} />
                 <Route path="/test/profile" element={<ProfilePage />} />
 
+                <Route path="/catalog" element={<LitePage />} />
+                <Route path="/search" element={<LitePage />} />
+                <Route path="/bookings" element={<LitePage />} />
+                <Route path="/profile" element={<LitePage />} />
+
                 {/* Остальное */}
                 <Route path="/admin" element={<AdminPage />} />
                 <Route path="/bookings/:id/confirmed" element={<BookingConfirmedPage />} />
