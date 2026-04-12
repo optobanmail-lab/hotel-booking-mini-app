@@ -6,31 +6,39 @@ export function initTelegram() {
     const webApp = tg()
     if (!webApp) return
 
+    // Сообщаем Telegram, что приложение готово
     webApp.ready()
 
-    // развернуть “шторку” на максимум
+    // Максимально развернуть "плашку"
     webApp.expand()
 
-    // полезно: не давать закрывать свайпом вниз (если поддерживается клиентом)
+    // Запретить сворачивание свайпом вниз (работает не везде)
     webApp.disableVerticalSwipes?.()
 
-    // при изменении viewport пробуем снова expand (на некоторых устройствах)
+    // Если Telegram меняет viewport — пробуем снова expand
     webApp.onEvent?.('viewportChanged', () => {
         webApp.expand()
     })
+
+    // Попытка true fullscreen (не всегда поддерживается и может игнорироваться без клика)
+    try {
+        webApp.requestFullscreen?.()
+    } catch (_) {
+        // игнор
+    }
 }
 
-/**
- * Настоящий fullscreen (не всегда поддерживается и часто требует клика пользователя)
- */
 export function requestTelegramFullscreen() {
     const webApp = tg()
     if (!webApp) return
 
+    webApp.expand()
+
     if (typeof webApp.requestFullscreen === 'function') {
-        webApp.requestFullscreen()
-    } else {
-        // fallback
-        webApp.expand()
+        try {
+            webApp.requestFullscreen()
+        } catch (_) {
+            // ignore
+        }
     }
 }

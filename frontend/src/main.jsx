@@ -9,12 +9,22 @@ import './App.css'
 const rootEl = document.getElementById('root')
 
 function showFatal(err) {
-    const msg = (err && (err.stack || err.message)) ? (err.stack || err.message) : String(err)
-    rootEl.innerHTML = `
-    <pre style="white-space:pre-wrap; padding:12px; font:14px/1.4 monospace; background:#000; color:#fff;">
-${msg}
-    </pre>
-  `
+    if (!rootEl) return
+    const msg =
+        err && (err.stack || err.message)
+            ? (err.stack || err.message)
+            : String(err)
+
+    // Безопасно: не innerHTML, а textContent
+    rootEl.innerHTML = ''
+    const pre = document.createElement('pre')
+    pre.style.whiteSpace = 'pre-wrap'
+    pre.style.padding = '12px'
+    pre.style.font = '14px/1.4 monospace'
+    pre.style.background = '#000'
+    pre.style.color = '#fff'
+    pre.textContent = msg
+    rootEl.appendChild(pre)
 }
 
 window.addEventListener('error', (e) => showFatal(e.error || e.message))
@@ -22,7 +32,7 @@ window.addEventListener('unhandledrejection', (e) => showFatal(e.reason))
 
 initTelegram()
 
-ReactDOM.createRoot(document.getElementById('root')).render(
+ReactDOM.createRoot(rootEl).render(
     <BrowserRouter>
         <ThemeProvider theme={theme}>
             <CssBaseline />
