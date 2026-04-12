@@ -8,11 +8,11 @@ import {
     Divider,
     IconButton,
     InputAdornment,
+    MenuItem,
     Paper,
     Stack,
     TextField,
     Typography,
-    MenuItem,
     CircularProgress,
 } from '@mui/material'
 
@@ -27,12 +27,34 @@ import BedRoundedIcon from '@mui/icons-material/BedRounded'
 
 import { createBooking, getHotel } from '../api'
 
+const PHONE_PREFIX = '+7' // если вдруг бэк ожидает другой формат — меняешь только тут
+
+function todayISO() {
+    const d = new Date()
+    d.setHours(0, 0, 0, 0)
+    return d.toISOString().slice(0, 10)
+}
+
+function addDaysISO(iso, days) {
+    const d = new Date(iso)
+    d.setDate(d.getDate() + days)
+    d.setHours(0, 0, 0, 0)
+    return d.toISOString().slice(0, 10)
+}
+
 function clampInt(n, min, max) {
     const x = Number(n)
     if (Number.isNaN(x)) return min
     return Math.max(min, Math.min(max, x))
 }
 
+function parseIntSafe(v, fallback) {
+    const s = String(v ?? '').replace(/\D/g, '')
+    if (!s) return fallback
+    return parseInt(s, 10)
+}
+
+// ФИО: только буквы + пробел/дефис/апостроф, НЕ trim() в процессе ввода
 function sanitizeNameInput(value) {
     let v = String(value ?? '')
         .replace(/[^A-Za-zА-Яа-яЁёІіҢңҒғҮүҰұҚқӨөӘә\s'-]/g, '')
@@ -44,20 +66,16 @@ function normalizeNameFinal(value) {
     return String(value ?? '').replace(/\s{2,}/g, ' ').trim()
 }
 
+// Город: только буквы + пробел/дефис
 function sanitizeCity(value) {
     const v = String(value ?? '')
-        .replace(/[^A-Za-zА-Яа-яЁёІіҢңҒғҮүҰұҚқӨөӘә\s-]/g, '')
+        .replace(/[^A-Za-zА-Яа-яЁёІіҢңҒғÜüҰұҚқӨөӘә\s-]/g, '')
         .replace(/\s+/g, ' ')
         .trim()
     return v.slice(0, 40)
 }
 
-function todayISO() {
-    const d = new Date()
-    d.setHours(0, 0, 0, 0)
-    return d.toISOString().slice(0, 10)
-}
-
+// телефон: 10 цифр (после +7)
 function formatPhone10(d10) {
     const d = String(d10 || '').replace(/\D/g, '').slice(0, 10)
     const p1 = d.slice(0, 3)
@@ -74,19 +92,14 @@ function formatPhone10(d10) {
     return out.trim()
 }
 
-function parseIntSafe(digits, fallback) {
-    const s = String(digits ?? '').replace(/\D/g, '')
-    if (!s) return fallback
-    return parseInt(s, 10)
-}
-
 function axiosErrorText(err) {
     const status = err?.response?.status
     const data = err?.response?.data
+
     if (status) {
         if (typeof data === 'string') return `${status}: ${data}`
         if (data?.detail) return `${status}: ${data.detail}`
-        return `${status}: Ошибка сервера`
+        return `${status}: Bad Request`
     }
     return err?.message || 'Ошибка сети'
 }
@@ -95,32 +108,37 @@ export default function BookingPage() {
     const navigate = useNavigate()
     const [params] = useSearchParams()
 
+    // Ожидаем /booking/new?hotelId=123
     const hotelId = Number(params.get('hotelId') || 0) || null
 
     const [hotel, setHotel] = useState(null)
     const [roomTypes, setRoomTypes] = useState([])
     const [roomTypeId, setRoomTypeId] = useState('')
 
-    const [form, setForm] = useState(() => ({
-        checkIn: todayISO(),
-        checkOut: todayISO(),
-        adults: 1,
-        children: 0,
-        fullName: '',
-        phone10: '',
-        city: '',
-    }))
-
     const [loadingHotel, setLoadingHotel] = useState(false)
     const [submitting, setSubmitting] = useState(false)
     const [submitError, setSubmitError] = useState('')
 
+    const [form, setForm] = useState(() => {
+        const in0 = todayISO()
+        return {
+            checkIn: in0,
+            checkOut: addDaysISO(in0, 1), // ВАЖНО: выезд завтра по умолчанию
+            adults: 1,
+            children: 0,
+            fullName: '',
+            phone10: '',
+            city: '',
+        }
+    })
+
     const phoneFormatted = useMemo(() => formatPhone10(form.phone10), [form.phone10])
 
+    // грузим отель + типы комнат
     useEffect(() => {
         if (!hotelId) return
-        let alive = true
 
+        let alive = true
         ;(async () => {
             setLoadingHotel(true)
             try {
@@ -129,11 +147,18 @@ export default function BookingPage() {
 
                 setHotel(h)
 
-                // под разные названия (чтобы не гадать)
-                const rts = h?.room_types || h?.roomTypes || h?.rooms || h?.room_type_list || []
+                // Поддерживаем разные названия поля
+                const rts =
+                    h?.room_types ||
+                    h?.roomTypes ||
+                    h?.rooms ||
+                    h?.room_type_list ||
+                    []
+
                 const arr = Array.isArray(rts) ? rts : []
                 setRoomTypes(arr)
 
+                // выбрать первый тип номера по умолчанию
                 const first = arr[0]?.id ? String(arr[0].id) : ''
                 setRoomTypeId(first)
             } finally {
@@ -149,12 +174,16 @@ export default function BookingPage() {
     const errors = useMemo(() => {
         const e = {}
 
-        if (!hotelId) e.hotelId = 'Откройте бронирование из карточки отеля'
+        if (!hotelId) e.hotelId = 'Откройте бронирование из карточки отеля (нужен hotelId)'
         if (!roomTypeId) e.roomTypeId = 'Выберите тип номера'
 
         if (!form.checkIn) e.checkIn = 'Выберите дату заезда'
         if (!form.checkOut) e.checkOut = 'Выберите дату выезда'
-        if (form.checkIn && form.checkOut && form.checkOut < form.checkIn) e.checkOut = 'Выезд не может быть раньше заезда'
+
+        // ВАЖНО: выезд строго позже заезда
+        if (form.checkIn && form.checkOut && form.checkOut <= form.checkIn) {
+            e.checkOut = 'Выезд должен быть позже заезда'
+        }
 
         if (form.adults < 1) e.adults = 'Минимум 1 взрослый'
         if (form.adults > 6) e.adults = 'Максимум 6 взрослых'
@@ -179,6 +208,7 @@ export default function BookingPage() {
 
         setSubmitError('')
         setSubmitting(true)
+
         try {
             const payload = {
                 hotel_id: hotelId,
@@ -188,14 +218,17 @@ export default function BookingPage() {
                 adults: form.adults,
                 children: form.children,
                 full_name: normalizeNameFinal(form.fullName),
-                phone: `+7${form.phone10}`,
+                phone: `${PHONE_PREFIX}${form.phone10}`,
                 city: form.city.trim(),
             }
 
             const res = await createBooking(payload)
 
-            if (res?.id) navigate(`/bookings/${res.id}/confirmed`)
-            else navigate('/bookings')
+            if (res?.id) {
+                navigate(`/bookings/${res.id}/confirmed`)
+            } else {
+                navigate('/bookings')
+            }
         } catch (err) {
             setSubmitError(axiosErrorText(err))
         } finally {
@@ -204,7 +237,13 @@ export default function BookingPage() {
     }
 
     return (
-        <Box sx={{ minHeight: '100dvh', background: 'linear-gradient(180deg, rgba(227,238,255,1) 0%, rgba(250,250,252,1) 55%)', pb: 12 }}>
+        <Box
+            sx={{
+                minHeight: '100dvh',
+                background: 'linear-gradient(180deg, rgba(227,238,255,1) 0%, rgba(250,250,252,1) 55%)',
+                pb: 12,
+            }}
+        >
             <Container maxWidth="sm" sx={{ pt: 2 }}>
                 <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.2 }}>
                     <IconButton onClick={() => navigate(-1)} sx={{ bgcolor: '#fff', border: '1px solid rgba(16,24,40,0.08)' }}>
@@ -220,7 +259,17 @@ export default function BookingPage() {
                     </Box>
                 </Stack>
 
-                <Paper elevation={0} variant="outlined" sx={{ p: 2, borderRadius: 3, bgcolor: 'rgba(255,255,255,0.92)', borderColor: 'rgba(16,24,40,0.10)', backdropFilter: 'blur(8px)' }}>
+                <Paper
+                    elevation={0}
+                    variant="outlined"
+                    sx={{
+                        p: 2,
+                        borderRadius: 3,
+                        bgcolor: 'rgba(255,255,255,0.92)',
+                        borderColor: 'rgba(16,24,40,0.10)',
+                        backdropFilter: 'blur(8px)',
+                    }}
+                >
                     <Stack spacing={1.6}>
                         {submitError && <Alert severity="error">{submitError}</Alert>}
                         {errors.hotelId && <Alert severity="warning">{errors.hotelId}</Alert>}
@@ -263,14 +312,26 @@ export default function BookingPage() {
                                 value={form.checkIn}
                                 onChange={(e) => {
                                     const next = e.target.value
-                                    setForm((s) => ({ ...s, checkIn: next, checkOut: s.checkOut < next ? next : s.checkOut }))
+                                    setForm((s) => ({
+                                        ...s,
+                                        checkIn: next,
+                                        // если выезд <= заезд — сдвинем на +1 день
+                                        checkOut: s.checkOut <= next ? addDaysISO(next, 1) : s.checkOut,
+                                    }))
                                 }}
                                 error={!!errors.checkIn}
                                 helperText={errors.checkIn || ' '}
                                 InputLabelProps={{ shrink: true }}
                                 inputProps={{ min: todayISO() }}
-                                InputProps={{ startAdornment: <InputAdornment position="start"><CalendarMonthRoundedIcon fontSize="small" /></InputAdornment> }}
+                                InputProps={{
+                                    startAdornment: (
+                                        <InputAdornment position="start">
+                                            <CalendarMonthRoundedIcon fontSize="small" />
+                                        </InputAdornment>
+                                    ),
+                                }}
                             />
+
                             <TextField
                                 fullWidth
                                 label="Выезд"
@@ -280,8 +341,14 @@ export default function BookingPage() {
                                 error={!!errors.checkOut}
                                 helperText={errors.checkOut || ' '}
                                 InputLabelProps={{ shrink: true }}
-                                inputProps={{ min: form.checkIn || todayISO() }}
-                                InputProps={{ startAdornment: <InputAdornment position="start"><CalendarMonthRoundedIcon fontSize="small" /></InputAdornment> }}
+                                inputProps={{ min: addDaysISO(form.checkIn || todayISO(), 1) }}
+                                InputProps={{
+                                    startAdornment: (
+                                        <InputAdornment position="start">
+                                            <CalendarMonthRoundedIcon fontSize="small" />
+                                        </InputAdornment>
+                                    ),
+                                }}
                             />
                         </Stack>
 
@@ -294,8 +361,15 @@ export default function BookingPage() {
                                 error={!!errors.adults}
                                 helperText={errors.adults || ' '}
                                 inputProps={{ inputMode: 'numeric', pattern: '[0-9]*' }}
-                                InputProps={{ startAdornment: <InputAdornment position="start"><PersonRoundedIcon fontSize="small" /></InputAdornment> }}
+                                InputProps={{
+                                    startAdornment: (
+                                        <InputAdornment position="start">
+                                            <PersonRoundedIcon fontSize="small" />
+                                        </InputAdornment>
+                                    ),
+                                }}
                             />
+
                             <TextField
                                 fullWidth
                                 label="Дети"
@@ -304,11 +378,21 @@ export default function BookingPage() {
                                 error={!!errors.children}
                                 helperText={errors.children || ' '}
                                 inputProps={{ inputMode: 'numeric', pattern: '[0-9]*' }}
-                                InputProps={{ startAdornment: <InputAdornment position="start"><ChildCareRoundedIcon fontSize="small" /></InputAdornment> }}
+                                InputProps={{
+                                    startAdornment: (
+                                        <InputAdornment position="start">
+                                            <ChildCareRoundedIcon fontSize="small" />
+                                        </InputAdornment>
+                                    ),
+                                }}
                             />
                         </Stack>
 
-                        {errors.people && <Typography variant="body2" sx={{ color: 'error.main', mt: -1 }}>{errors.people}</Typography>}
+                        {errors.people && (
+                            <Typography variant="body2" sx={{ color: 'error.main', mt: -1 }}>
+                                {errors.people}
+                            </Typography>
+                        )}
 
                         <Divider />
 
@@ -318,9 +402,15 @@ export default function BookingPage() {
                             onChange={(e) => setForm((s) => ({ ...s, fullName: sanitizeNameInput(e.target.value) }))}
                             onBlur={() => setForm((s) => ({ ...s, fullName: normalizeNameFinal(s.fullName) }))}
                             error={!!errors.fullName}
-                            helperText={errors.fullName || ' '}
-                            inputProps={{ maxLength: 60 }}
-                            InputProps={{ startAdornment: <InputAdornment position="start"><BadgeRoundedIcon fontSize="small" /></InputAdornment> }}
+                            helperText={errors.fullName || 'Только буквы, пробел, дефис, апостроф'}
+                            inputProps={{ maxLength: 60, autoComplete: 'name' }}
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <BadgeRoundedIcon fontSize="small" />
+                                    </InputAdornment>
+                                ),
+                            }}
                         />
 
                         <TextField
@@ -328,19 +418,20 @@ export default function BookingPage() {
                             value={phoneFormatted}
                             onChange={(e) => {
                                 let digits = String(e.target.value).replace(/\D/g, '')
+                                // если вставили +7XXXXXXXXXX/8XXXXXXXXXX — отрежем первую цифру
                                 if (digits.length >= 11 && (digits.startsWith('7') || digits.startsWith('8'))) digits = digits.slice(1)
                                 digits = digits.slice(0, 10)
                                 setForm((s) => ({ ...s, phone10: digits }))
                             }}
                             error={!!errors.phone}
-                            helperText={errors.phone || ' '}
+                            helperText={errors.phone || 'Формат: +7 и 10 цифр'}
                             placeholder="(7__) ___-__-__"
                             inputProps={{ inputMode: 'numeric', autoComplete: 'tel', maxLength: 18 }}
                             InputProps={{
                                 startAdornment: (
                                     <InputAdornment position="start">
                                         <PhoneIphoneRoundedIcon fontSize="small" />
-                                        <Box sx={{ ml: 0.8, fontWeight: 900 }}>+7</Box>
+                                        <Box sx={{ ml: 0.8, fontWeight: 900 }}>{PHONE_PREFIX}</Box>
                                     </InputAdornment>
                                 ),
                             }}
@@ -353,7 +444,13 @@ export default function BookingPage() {
                             error={!!errors.city}
                             helperText={errors.city || ' '}
                             inputProps={{ maxLength: 40 }}
-                            InputProps={{ startAdornment: <InputAdornment position="start"><LocationCityRoundedIcon fontSize="small" /></InputAdornment> }}
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <LocationCityRoundedIcon fontSize="small" />
+                                    </InputAdornment>
+                                ),
+                            }}
                         />
 
                         <Button
