@@ -12,8 +12,9 @@ import {
 
 import BookmarkBorderRoundedIcon from '@mui/icons-material/BookmarkBorderRounded'
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded'
-import StarRoundedIcon from '@mui/icons-material/StarRounded'
 import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined'
+
+const PLACEHOLDER = '/hotel-placeholder.svg'
 
 function clamp(n, a, b) {
     return Math.max(a, Math.min(b, n))
@@ -44,19 +45,24 @@ function StarsText({ count = 4 }) {
     )
 }
 
+function photoSrc(url) {
+    const u = (url ?? '').trim()
+    return u ? u : PLACEHOLDER
+}
+
 export default function HotelCardBookingLike({ h, onClick }) {
-    const photo = h.main_photo_url || 'https://picsum.photos/600/600'
-    const price = Number(h.price_from_kzt ?? 0)
+    const photo = photoSrc(h?.main_photo_url)
+    const price = Number(h?.price_from_kzt ?? 0)
 
-    const r10 = h.rating_value ?? ratingTo10(h.rating)
-    const rLabel = h.rating_label ?? ratingLabel(r10)
-    const reviews = h.reviews_count ?? 0
+    const r10 = h?.rating_value ?? ratingTo10(h?.rating)
+    const rLabel = h?.rating_label ?? ratingLabel(r10)
+    const reviews = h?.reviews_count ?? 0
 
-    const stars = h.stars ?? 4
-    const distance = h.distance_to_center_km ?? 2.5
-    const perks = h.perks ?? ['Бесплатная отмена', 'Предоплата не требуется']
+    const stars = h?.stars ?? 4
+    const distance = h?.distance_to_center_km ?? 2.5
+    const perks = h?.perks ?? ['Бесплатная отмена', 'Предоплата не требуется']
 
-    const oldPrice = h.old_price_kzt ?? (price ? Math.round(price * 1.18) : null)
+    const oldPrice = h?.old_price_kzt ?? (price ? Math.round(price * 1.18) : null)
 
     return (
         <Card
@@ -68,7 +74,7 @@ export default function HotelCardBookingLike({ h, onClick }) {
                 bgcolor: '#fff',
             }}
         >
-            {/* ВАЖНО: component="div" — чтобы не было <button> внутри <button> */}
+            {/* component="div" — чтобы не было <button> внутри <button> */}
             <CardActionArea component="div" onClick={onClick} sx={{ p: 1.25 }}>
                 <Stack direction="row" spacing={1.25} alignItems="stretch">
                     {/* Image */}
@@ -76,15 +82,22 @@ export default function HotelCardBookingLike({ h, onClick }) {
                         <Box
                             component="img"
                             src={photo}
-                            alt={h.name}
+                            alt={h?.name ?? 'Hotel'}
                             loading="lazy"
                             decoding="async"
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                                // чтобы не было бесконечного onError
+                                e.currentTarget.onerror = null
+                                e.currentTarget.src = PLACEHOLDER
+                            }}
                             sx={{
                                 width: 132,
                                 height: 132,
                                 borderRadius: 2,
                                 objectFit: 'cover',
                                 display: 'block',
+                                bgcolor: '#f3f4f6',
                             }}
                         />
 
@@ -100,7 +113,7 @@ export default function HotelCardBookingLike({ h, onClick }) {
                             onClick={(e) => {
                                 e.stopPropagation()
                                 e.preventDefault()
-                                // тут можно сделать "избранное"
+                                // избранное (демо)
                             }}
                         >
                             <BookmarkBorderRoundedIcon fontSize="small" />
@@ -120,13 +133,13 @@ export default function HotelCardBookingLike({ h, onClick }) {
                                     }}
                                     noWrap
                                 >
-                                    {h.name}
+                                    {h?.name ?? '—'}
                                 </Typography>
 
                                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.3 }}>
                                     <StarsText count={stars} />
                                     <Typography variant="caption" color="text.secondary">
-                                        {h.city ?? '—'}
+                                        {h?.city ?? '—'}
                                     </Typography>
                                 </Stack>
                             </Box>
@@ -145,7 +158,11 @@ export default function HotelCardBookingLike({ h, onClick }) {
                                         }}
                                     />
                                 )}
-                                {rLabel && <Typography variant="body2" sx={{ fontWeight: 950 }}>{rLabel}</Typography>}
+                                {rLabel && (
+                                    <Typography variant="body2" sx={{ fontWeight: 950 }}>
+                                        {rLabel}
+                                    </Typography>
+                                )}
                                 <Typography variant="body2" color="text.secondary">
                                     · {reviews} отзывов
                                 </Typography>
@@ -154,7 +171,7 @@ export default function HotelCardBookingLike({ h, onClick }) {
                             <Stack direction="row" spacing={0.6} alignItems="center">
                                 <LocationOnOutlinedIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
                                 <Typography variant="body2" color="text.secondary" noWrap>
-                                    {h.city ?? '—'} · {distance} км от центра
+                                    {h?.city ?? '—'} · {distance} км от центра
                                 </Typography>
                             </Stack>
 
@@ -172,7 +189,11 @@ export default function HotelCardBookingLike({ h, onClick }) {
                             <Stack direction="row" alignItems="flex-end" justifyContent="space-between" sx={{ mt: 0.7 }}>
                                 <Box>
                                     {oldPrice ? (
-                                        <Typography variant="body2" color="text.secondary" sx={{ textDecoration: 'line-through' }}>
+                                        <Typography
+                                            variant="body2"
+                                            color="text.secondary"
+                                            sx={{ textDecoration: 'line-through' }}
+                                        >
                                             KZT {oldPrice.toLocaleString('ru-RU')}
                                         </Typography>
                                     ) : (
