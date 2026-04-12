@@ -29,7 +29,11 @@ export default function AppLayout() {
                     overflowY: 'auto',
                     overflowX: 'hidden',
                     WebkitOverflowScrolling: 'touch',
+
+                    // Место под кнопки Telegram сверху
                     pt: 'calc(var(--tg-top, 0px) + env(safe-area-inset-top) + 8px)',
+
+                    // Место снизу под BottomBar + safe-area
                     pb: isAdmin
                         ? 'calc(var(--tg-bottom, 0px) + env(safe-area-inset-bottom))'
                         : 'calc(88px + var(--tg-bottom, 0px) + env(safe-area-inset-bottom))',

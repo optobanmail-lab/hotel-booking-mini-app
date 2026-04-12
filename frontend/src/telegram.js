@@ -17,11 +17,9 @@ function applyTelegramInsets() {
     const safe = webApp.safeAreaInset || {}
     const content = webApp.contentSafeAreaInset || {}
 
-    let top = Math.max(safe.top || 0, content.top || 0)
-    let bottom = Math.max(safe.bottom || 0, content.bottom || 0)
-
-    // Фолбэк, если Telegram inset не отдаёт
-    if (top === 0) top = 56
+    // Telegram иногда отдаёт 0, но кнопки сверху есть — делаем фолбэк
+    const top = Math.max(safe.top || 0, content.top || 0, 56) // 56px обычно хватает
+    const bottom = Math.max(safe.bottom || 0, content.bottom || 0)
 
     setCssVar('--tg-top', top)
     setCssVar('--tg-bottom', bottom)
@@ -30,12 +28,12 @@ function applyTelegramInsets() {
 export function initTelegram() {
     const webApp = tg()
     if (!webApp) {
-        // если не Telegram — убираем флаг на всякий случай
         document.documentElement.removeAttribute('data-tg')
+        setCssVar('--tg-top', 0)
+        setCssVar('--tg-bottom', 0)
         return
     }
 
-    // Флаг "мы внутри Telegram"
     document.documentElement.setAttribute('data-tg', '1')
 
     webApp.ready()
@@ -48,6 +46,6 @@ export function initTelegram() {
         webApp.expand()
         applyTelegramInsets()
     })
-    webApp.onEvent?.('safeAreaChanged', () => applyTelegramInsets())
-    webApp.onEvent?.('contentSafeAreaChanged', () => applyTelegramInsets())
+    webApp.onEvent?.('safeAreaChanged', applyTelegramInsets)
+    webApp.onEvent?.('contentSafeAreaChanged', applyTelegramInsets)
 }

@@ -1,4 +1,4 @@
-:root{
+:root {
   --tg-top: 0px;
   --tg-bottom: 0px;
 }
@@ -18,7 +18,7 @@ body {
   height: 100%;
 }
 
-/* Телефонный формат на ПК — ТОЛЬКО вне Telegram */
+/* "Телефонный формат" на ПК — ТОЛЬКО вне Telegram */
 @media (min-width: 900px) {
   html:not([data-tg="1"]) #root {
     display: grid;
@@ -29,14 +29,22 @@ body {
   html:not([data-tg="1"]) .phone-frame {
     width: 520px;
     max-width: 520px;
-
-    /* чтобы было максимально по высоте окна */
     height: calc(100dvh - 48px);
-
     border-radius: 24px;
     overflow: hidden;
     background: #fff;
-    border: 1px solid rgba(16,24,40,0.12);
-    box-shadow: 0 20px 60px rgba(16,24,40,0.18);
+    border: 1px solid rgba(16, 24, 40, 0.12);
+    box-shadow: 0 20px 60px rgba(16, 24, 40, 0.18);
   }
+}
+
+/* В Telegram рамку отключаем полностью */
+html[data-tg="1"] .phone-frame {
+  width: 100% !important;
+  max-width: none !important;
+  height: 100dvh !important;
+  border-radius: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
 }
