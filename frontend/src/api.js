@@ -4,6 +4,7 @@ const API_BASE = import.meta.env.VITE_API_BASE ?? ''
 
 export const api = axios.create({
     baseURL: API_BASE,
+    timeout: 15000,
 })
 
 function tgWebApp() {
@@ -23,7 +24,7 @@ export function telegramInitData() {
     return tgWebApp()?.initData ?? ''
 }
 
-// Автоматически добавляем заголовки на каждый запрос
+// --- Request interceptor: Telegram headers ---
 api.interceptors.request.use((config) => {
     const headers = config.headers ?? {}
 
@@ -37,6 +38,35 @@ api.interceptors.request.use((config) => {
     return config
 })
 
+// --- Response interceptor: retry on 502/503/504 (Render cold start) ---
+function sleep(ms) {
+    return new Promise((r) => setTimeout(r, ms))
+}
+
+api.interceptors.response.use(
+    (res) => res,
+    async (error) => {
+        const config = error.config || {}
+        const status = error.response?.status
+
+        // Сколько раз уже ретраили этот запрос
+        config.__retryCount = config.__retryCount || 0
+
+        const retryable = !error.response || [502, 503, 504].includes(status)
+
+        // Ретраим до 5 раз с увеличивающейся задержкой
+        if (retryable && config.__retryCount < 5) {
+            config.__retryCount += 1
+            const delay = Math.min(1500 * config.__retryCount, 7000) // 1.5s, 3s, 4.5s, 6s, 7s
+            await sleep(delay)
+            return api.request(config)
+        }
+
+        throw error
+    }
+)
+
+// --- API functions ---
 export async function getHotels(city) {
     const res = await api.get('/api/hotels', { params: { city: city ?? '' } })
     return res.data
