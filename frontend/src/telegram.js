@@ -20,7 +20,7 @@ function applyTelegramInsets() {
     let top = Math.max(safe.top || 0, content.top || 0)
     let bottom = Math.max(safe.bottom || 0, content.bottom || 0)
 
-    // Фолбэк: иногда Telegram не отдаёт inset, но кнопки сверху есть
+    // Фолбэк, если Telegram inset не отдаёт
     if (top === 0) top = 56
 
     setCssVar('--tg-top', top)
@@ -29,7 +29,14 @@ function applyTelegramInsets() {
 
 export function initTelegram() {
     const webApp = tg()
-    if (!webApp) return
+    if (!webApp) {
+        // если не Telegram — убираем флаг на всякий случай
+        document.documentElement.removeAttribute('data-tg')
+        return
+    }
+
+    // Флаг "мы внутри Telegram"
+    document.documentElement.setAttribute('data-tg', '1')
 
     webApp.ready()
     webApp.expand()
