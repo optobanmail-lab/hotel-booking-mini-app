@@ -8,14 +8,14 @@ import {
     Skeleton,
     Stack,
     Typography,
-    IconButton,
 } from '@mui/material'
-import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded'
 import { appBg } from '../ui/appBg'
 import { getNews } from '../api'
 
 const PLACEHOLDER = '/news-placeholder.svg'
-const REFRESH_MS = 5 * 60 * 1000 // 5 минут
+
+// важно: убираем слэш в конце, если он есть
+const API_BASE = (import.meta.env.VITE_API_BASE ?? '').replace(/\/+$/, '')
 
 function openLink(url) {
     const tg = window.Telegram?.WebApp
@@ -23,63 +23,55 @@ function openLink(url) {
     else window.open(url, '_blank', 'noopener,noreferrer')
 }
 
-function imgSrc(url) {
+function proxyImg(url) {
     const u = (url || '').trim()
-    return u ? u : PLACEHOLDER
+    if (!u) return PLACEHOLDER
+
+    // если base не задан, пробуем относительный (для dev с прокси)
+    if (!API_BASE) return `/api/img?url=${encodeURIComponent(u)}`
+    return `${API_BASE}/api/img?url=${encodeURIComponent(u)}`
 }
 
 export default function HomeNewsPage() {
     const [items, setItems] = useState([])
     const [loading, setLoading] = useState(false)
 
-    async function load() {
-        setLoading(true)
-        try {
-            const data = await getNews(8)
-            setItems(Array.isArray(data) ? data : [])
-        } finally {
-            setLoading(false)
-        }
-    }
-
     useEffect(() => {
         let alive = true
 
         ;(async () => {
-            await load()
+            setLoading(true)
+            try {
+                const data = await getNews(8)
+                if (alive) setItems(Array.isArray(data) ? data : [])
+            } finally {
+                if (alive) setLoading(false)
+            }
         })()
 
-        const t = setInterval(() => {
-            if (!alive) return
-            // обновляем только когда вкладка активна
-            if (document.visibilityState === 'visible') load()
-        }, REFRESH_MS)
-
-        const onVis = () => {
-            if (document.visibilityState === 'visible') load()
-        }
-        document.addEventListener('visibilitychange', onVis)
+        // обновление раз в 5 минут
+        const t = setInterval(async () => {
+            if (document.visibilityState !== 'visible') return
+            try {
+                const data = await getNews(8)
+                if (alive) setItems(Array.isArray(data) ? data : [])
+            } catch {
+                // не мешаем UI
+            }
+        }, 5 * 60 * 1000)
 
         return () => {
             alive = false
             clearInterval(t)
-            document.removeEventListener('visibilitychange', onVis)
         }
     }, [])
 
     return (
         <Box sx={{ minHeight: '100vh', ...appBg, pb: 12 }}>
             <Box sx={{ px: 2, pt: 2, maxWidth: 520, mx: 'auto' }}>
-                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
-                    <Typography variant="h6" fontWeight={950}>
-                        Новости: отели Казахстана
-                    </Typography>
-
-                    <IconButton onClick={load} disabled={loading} size="small">
-                        <RefreshRoundedIcon />
-                    </IconButton>
-                </Stack>
-
+                <Typography variant="h6" fontWeight={950} sx={{ mb: 0.5 }}>
+                    Новости: отели Казахстана
+                </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                     Реальные статьи · Google News RSS
                 </Typography>
@@ -95,8 +87,8 @@ export default function HomeNewsPage() {
 
                     {!loading &&
                         items.map((n, idx) => {
-                            const url = n.url || n.link // на всякий случай
-                            const photo = imgSrc(n.image_url)
+                            const url = n.url || n.link
+                            const img = proxyImg(n.image_url)
 
                             return (
                                 <Card key={(url || 'x') + idx} variant="outlined" sx={{ bgcolor: '#fff' }}>
@@ -112,11 +104,10 @@ export default function HomeNewsPage() {
                                             <Stack direction="row" spacing={1.2} sx={{ mt: 1 }} alignItems="flex-start">
                                                 <Box
                                                     component="img"
-                                                    src={photo}
+                                                    src={img}
                                                     alt=""
                                                     loading="lazy"
                                                     decoding="async"
-                                                    referrerPolicy="no-referrer"
                                                     onError={(e) => {
                                                         e.currentTarget.onerror = null
                                                         e.currentTarget.src = PLACEHOLDER
