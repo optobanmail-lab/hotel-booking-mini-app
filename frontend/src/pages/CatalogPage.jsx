@@ -22,6 +22,15 @@ import HotelCardBookingLike from '../components/HotelCardBookingLike'
 
 const CITIES = ['Алматы', 'Астана', 'Шымкент', 'Караганда', 'Актобе', 'Атырау']
 
+function shuffle(arr) {
+    const a = [...arr]
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        ;[a[i], a[j]] = [a[j], a[i]]
+    }
+    return a
+}
+
 export default function CatalogPage() {
     const navigate = useNavigate()
     const [city, setCity] = useState('')
@@ -32,17 +41,26 @@ export default function CatalogPage() {
         const c = (v ?? city).trim()
         setLoading(true)
         try {
-            setHotels(await getHotels(c))
+            const list = await getHotels(c)
+            // перемешиваем базовый список, чтобы любые дальнейшие выборки были "живые"
+            setHotels(shuffle(list))
         } finally {
             setLoading(false)
         }
     }
 
-    useEffect(() => { load('') }, [])
+    useEffect(() => {
+        load('')
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
 
+    // Вариант B: случайные 5 из ТОП-20 по рейтингу
     const curated = useMemo(() => {
-        const arr = [...hotels].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
-        return arr.slice(0, 5)
+        const top = [...hotels]
+            .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
+            .slice(0, 20)
+
+        return shuffle(top).slice(0, 5)
     }, [hotels])
 
     return (
@@ -56,7 +74,17 @@ export default function CatalogPage() {
                     <Avatar sx={{ width: 34, height: 34, bgcolor: 'primary.main' }}>U</Avatar>
                 </Stack>
 
-                <Paper variant="outlined" sx={{ borderRadius: 999, px: 1, py: 0.6, bgcolor: '#fff', borderColor: 'rgba(16,24,40,0.10)', mb: 1.5 }}>
+                <Paper
+                    variant="outlined"
+                    sx={{
+                        borderRadius: 999,
+                        px: 1,
+                        py: 0.6,
+                        bgcolor: '#fff',
+                        borderColor: 'rgba(16,24,40,0.10)',
+                        mb: 1.5,
+                    }}
+                >
                     <Stack direction="row" alignItems="center" spacing={1}>
                         <SearchRoundedIcon sx={{ color: 'text.secondary', ml: 0.5 }} />
                         <InputBase
@@ -79,7 +107,13 @@ export default function CatalogPage() {
 
                 <Stack direction="row" spacing={1} sx={{ mb: 2, overflowX: 'auto', pb: 0.5 }}>
                     {CITIES.map((c) => (
-                        <Chip key={c} label={c} clickable onClick={() => navigate(`/search?city=${encodeURIComponent(c)}`)} sx={{ bgcolor: '#fff' }} />
+                        <Chip
+                            key={c}
+                            label={c}
+                            clickable
+                            onClick={() => navigate(`/search?city=${encodeURIComponent(c)}`)}
+                            sx={{ bgcolor: '#fff' }}
+                        />
                     ))}
                     <Chip label="Все" clickable onClick={() => navigate('/search')} sx={{ bgcolor: '#fff' }} />
                 </Stack>
