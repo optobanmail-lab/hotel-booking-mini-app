@@ -5,7 +5,7 @@ export default function App() {
     return (
         <Routes>
             <Route element={<AppLayout />}>
-                <Route path="*" element={<div style={{ padding: 16 }}>OK BOTTOMBAR</div>} />
+                <Route path="*" element={<div style={{ padding: 16 }}>OK TRANSITIONS</div>} />
             </Route>
         </Routes>
     )
