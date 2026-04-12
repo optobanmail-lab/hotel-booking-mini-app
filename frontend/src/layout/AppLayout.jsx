@@ -12,8 +12,15 @@ export default function AppLayout() {
     const transitionsEnabled = !isTelegram
 
     return (
-        <Box sx={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
-            {/* Кнопка fullscreen (только в Telegram) */}
+        <Box
+            sx={{
+                minHeight: '100dvh',
+                height: '100dvh',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden', // важно: body не скроллится
+            }}
+        >
             {!isAdmin && (
                 <Box
                     sx={{
@@ -21,7 +28,7 @@ export default function AppLayout() {
                         right: 12,
                         top: 'calc(env(safe-area-inset-top) + 12px)',
                         zIndex: 9999,
-                        pointerEvents: 'none', // чтобы контейнер не блокировал клики
+                        pointerEvents: 'none',
                     }}
                 >
                     <Box sx={{ pointerEvents: 'auto' }}>
@@ -30,7 +37,18 @@ export default function AppLayout() {
                 </Box>
             )}
 
-            <Box sx={{ flex: 1, pb: isAdmin ? 0 : 11, overflowX: 'hidden' }}>
+            {/* ЕДИНСТВЕННОЕ место, где есть скролл */}
+            <Box
+                id="app-scroll"
+                sx={{
+                    flex: 1,
+                    minHeight: 0, // важно для flex + overflow
+                    overflowY: 'auto',
+                    overflowX: 'hidden',
+                    WebkitOverflowScrolling: 'touch',
+                    pb: isAdmin ? 0 : 11,
+                }}
+            >
                 <PageTransition enabled={transitionsEnabled} routeKey={location.pathname}>
                     <Outlet />
                 </PageTransition>
