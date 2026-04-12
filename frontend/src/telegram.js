@@ -2,36 +2,29 @@ export function tg() {
     return window.Telegram?.WebApp
 }
 
-function disablePullToRefreshIOS(scrollSelector = '#app-scroll') {
-    const el = document.querySelector(scrollSelector)
-    if (!el) return
+function setCssVar(name, valuePx) {
+    document.documentElement.style.setProperty(name, `${Math.max(0, Math.round(valuePx || 0))}px`)
+}
 
-    let startY = 0
+function applyTelegramInsets() {
+    const webApp = tg()
+    if (!webApp) {
+        setCssVar('--tg-top', 0)
+        setCssVar('--tg-bottom', 0)
+        return
+    }
 
-    el.addEventListener(
-        'touchstart',
-        (e) => {
-            if (!e.touches?.length) return
-            startY = e.touches[0].clientY
-        },
-        { passive: true }
-    )
+    const safe = webApp.safeAreaInset || {}
+    const content = webApp.contentSafeAreaInset || {}
 
-    el.addEventListener(
-        'touchmove',
-        (e) => {
-            if (!e.touches?.length) return
+    let top = Math.max(safe.top || 0, content.top || 0)
+    let bottom = Math.max(safe.bottom || 0, content.bottom || 0)
 
-            // если мы в самом верху и тянем вниз — блокируем (чтобы не было "обновления")
-            const currentY = e.touches[0].clientY
-            const pullingDown = currentY > startY
+    // Фолбэк: иногда Telegram не отдаёт inset, но кнопки сверху есть
+    if (top === 0) top = 56
 
-            if (el.scrollTop <= 0 && pullingDown) {
-                e.preventDefault()
-            }
-        },
-        { passive: false } // важно: иначе preventDefault не сработает
-    )
+    setCssVar('--tg-top', top)
+    setCssVar('--tg-bottom', bottom)
 }
 
 export function initTelegram() {
@@ -40,27 +33,14 @@ export function initTelegram() {
 
     webApp.ready()
     webApp.expand()
-
     webApp.disableVerticalSwipes?.()
+
+    applyTelegramInsets()
 
     webApp.onEvent?.('viewportChanged', () => {
         webApp.expand()
+        applyTelegramInsets()
     })
-
-    // после рендера DOM подключаем iOS фикс
-    setTimeout(() => disablePullToRefreshIOS('#app-scroll'), 0)
-
-    // попытка fullscreen (не всегда работает без клика)
-    try {
-        webApp.requestFullscreen?.()
-    } catch (_) {}
-}
-
-export function requestTelegramFullscreen() {
-    const webApp = tg()
-    if (!webApp) return
-    webApp.expand()
-    try {
-        webApp.requestFullscreen?.()
-    } catch (_) {}
+    webApp.onEvent?.('safeAreaChanged', () => applyTelegramInsets())
+    webApp.onEvent?.('contentSafeAreaChanged', () => applyTelegramInsets())
 }

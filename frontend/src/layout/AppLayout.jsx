@@ -2,7 +2,6 @@ import { Box } from '@mui/material'
 import { Outlet, useLocation } from 'react-router-dom'
 import BottomBar from '../components/BottomBar'
 import PageTransition from '../components/PageTransition'
-import TelegramFullscreenButton from '../components/TelegramFullscreenButton'
 
 export default function AppLayout() {
     const location = useLocation()
@@ -13,40 +12,39 @@ export default function AppLayout() {
 
     return (
         <Box
+            className="phone-frame"
             sx={{
+                // на мобилке/Telegram рамка не нужна — будет обычная ширина
+                width: { xs: '100%', md: '100%' },
+                height: { xs: '100dvh', md: '100%' },
+
                 minHeight: '100dvh',
-                height: '100dvh',
                 display: 'flex',
                 flexDirection: 'column',
-                overflow: 'hidden', // важно: body не скроллится
+                overflow: 'hidden',
+                bgcolor: 'transparent',
             }}
         >
-            {!isAdmin && (
-                <Box
-                    sx={{
-                        position: 'fixed',
-                        right: 12,
-                        top: 'calc(env(safe-area-inset-top) + 12px)',
-                        zIndex: 9999,
-                        pointerEvents: 'none',
-                    }}
-                >
-                    <Box sx={{ pointerEvents: 'auto' }}>
-                        <TelegramFullscreenButton />
-                    </Box>
-                </Box>
-            )}
-
-            {/* ЕДИНСТВЕННОЕ место, где есть скролл */}
+            {/* единственный скролл-контейнер */}
             <Box
                 id="app-scroll"
                 sx={{
                     flex: 1,
-                    minHeight: 0, // важно для flex + overflow
+                    minHeight: 0,
                     overflowY: 'auto',
                     overflowX: 'hidden',
                     WebkitOverflowScrolling: 'touch',
-                    pb: isAdmin ? 0 : 11,
+
+                    // верх: Telegram-кнопки + notch + небольшой отступ
+                    pt: 'calc(var(--tg-top, 0px) + env(safe-area-inset-top) + 8px)',
+
+                    // низ: чтобы контент не залезал под BottomBar и home-indicator
+                    pb: isAdmin
+                        ? 'calc(var(--tg-bottom, 0px) + env(safe-area-inset-bottom))'
+                        : 'calc(88px + var(--tg-bottom, 0px) + env(safe-area-inset-bottom))',
+
+                    pl: 'env(safe-area-inset-left)',
+                    pr: 'env(safe-area-inset-right)',
                 }}
             >
                 <PageTransition enabled={transitionsEnabled} routeKey={location.pathname}>
