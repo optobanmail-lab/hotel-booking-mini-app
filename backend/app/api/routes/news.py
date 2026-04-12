@@ -10,17 +10,13 @@ from fastapi.responses import JSONResponse
 
 router = APIRouter(tags=["news"])
 
-# Google News RSS: "отели Казахстана"
 RSS_URL = (
     "https://news.google.com/rss/search?"
     "q=%D0%BE%D1%82%D0%B5%D0%BB%D0%B8%20%D0%9A%D0%B0%D0%B7%D0%B0%D1%85%D1%81%D1%82%D0%B0%D0%BD"
     "&hl=ru&gl=KZ&ceid=KZ:ru"
 )
 
-# как часто обновлять новости
 CACHE_TTL_SECONDS = 10 * 60  # 10 минут
-
-# глобальный кеш в памяти процесса
 _cache: Dict[str, Any] = {"expires_at": 0.0, "items": []}
 
 
@@ -29,7 +25,7 @@ def _strip_html(s: str) -> str:
 
 
 def _extract_image_from_entry(entry: Dict[str, Any]) -> Optional[str]:
-    # 1) media:content / media:thumbnail
+    # media:content / media:thumbnail
     media_content = entry.get("media_content") or []
     if isinstance(media_content, list) and media_content:
         url = (media_content[0] or {}).get("url")
@@ -42,7 +38,7 @@ def _extract_image_from_entry(entry: Dict[str, Any]) -> Optional[str]:
         if url:
             return url
 
-    # 2) enclosure (картинка как вложение)
+    # enclosure image
     links = entry.get("links") or []
     for lk in links:
         if (lk or {}).get("rel") == "enclosure" and str((lk or {}).get("type", "")).startswith("image/"):
@@ -50,7 +46,7 @@ def _extract_image_from_entry(entry: Dict[str, Any]) -> Optional[str]:
             if href:
                 return href
 
-    # 3) <img src="..."> внутри summary (редко)
+    # <img src="..."> inside summary
     html = entry.get("summary") or entry.get("description") or ""
     m = re.search(r'<img[^>]+src="([^"]+)"', html, re.IGNORECASE)
     if m:
@@ -85,10 +81,11 @@ async def _fetch_og_image(url: str, client: httpx.AsyncClient, sem: asyncio.Sema
             r = await client.get(url, follow_redirects=True)
             if r.status_code >= 400:
                 return None
-            # некоторые сайты отдают не HTML — просто не парсим
+
             ctype = (r.headers.get("content-type") or "").lower()
             if "text/html" not in ctype and "application/xhtml" not in ctype:
                 return None
+
             return _extract_og_image(r.text)
         except Exception:
             return None
@@ -103,7 +100,7 @@ async def _load_news(limit: int) -> List[Dict[str, Any]]:
             headers={"User-Agent": "Mozilla/5.0"},
             timeout=timeout,
     ) as client:
-        # 1) получаем RSS (НЕ raise_for_status — чтобы не было 500)
+        # Не используем raise_for_status(), чтобы не получить 500
         rss_resp = await client.get(RSS_URL, follow_redirects=True)
         if rss_resp.status_code >= 400:
             return []
@@ -132,23 +129,24 @@ async def _load_news(limit: int) -> List[Dict[str, Any]]:
                     "summary": _strip_html(summary),
                     "published": published,
                     "source": source,
-                    "url": url,            # фронт ждёт n.url
-                    "image_url": image_url # может быть None
+                    "url": url,
+                    "image_url": image_url,
                 }
             )
 
-        # 2) добираем картинки через og:image (ограниченно, чтобы не убить сервер)
-        MAX_OG_FETCH = 6     # максимум сколько статей пробуем "докрасить" картинкой
+        # Догружаем картинки через og:image ограниченно
+        MAX_OG_FETCH = 6
         sem = asyncio.Semaphore(4)
 
-        idxs = []
-        tasks = []
+        idxs: List[int] = []
+        tasks: List[asyncio.Task] = []
+
         for i, it in enumerate(items):
             if len(tasks) >= MAX_OG_FETCH:
                 break
             if not it["image_url"] and it["url"]:
                 idxs.append(i)
-                tasks.append(_fetch_og_image(it["url"], client, sem))
+                tasks.append(asyncio.create_task(_fetch_og_image(it["url"], client, sem)))
 
         if tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -162,31 +160,30 @@ async def _load_news(limit: int) -> List[Dict[str, Any]]:
 @router.get("/news")
 async def news(limit: int = Query(8, ge=1, le=50)):
     """
-    ВАЖНО: этот endpoint НИКОГДА не должен отдавать 500.
-    Если RSS/сайты недоступны — отдаём кеш или [].
+    Никогда не отдаём 500: если что-то сломалось — отдаём кеш или [].
     """
     now = time.time()
 
-    # кеш свежий
+    # свежий кеш
     if _cache["expires_at"] > now and _cache["items"]:
-        return JSONResponse(content=_cache["items"][:limit], headers={"Cache-Control": "no-store"})
+        return JSONResponse(content=_cache["items"][:limit], status_code=200, headers={"Cache-Control": "no-store"})
 
-    # пробуем обновить
     try:
         items = await _load_news(limit)
+
         if items:
             _cache["items"] = items
             _cache["expires_at"] = now + CACHE_TTL_SECONDS
-            return JSONResponse(content=items[:limit], headers={"Cache-Control": "no-store"})
+            return JSONResponse(content=items[:limit], status_code=200, headers={"Cache-Control": "no-store"})
 
-        # если пришёл пустой список — отдаём старый кеш, если есть
+        # если получили пусто — вернём старый кеш, если он есть
         if _cache["items"]:
-            return JSONResponse(content=_cache["items"][:limit], headers={"Cache-Control": "no-store"})
+            return JSONResponse(content=_cache["items"][:limit], status_code=200, headers={"Cache-Control": "no-store"})
 
-        return JSONResponse(content=[], headers={"Cache-Control": "no-store"})
+        return JSONResponse(content=[], status_code=200, headers={"Cache-Control": "no-store"})
 
     except Exception:
-        # ВООБЩЕ НИКАКИХ 500
+        # вообще никаких 500
         if _cache["items"]:
-            return JSONResponse(content=_cache["items"][:limit], headers={"Cache-Control": "no-store"})
-        return JSONResponse(content=[], headers={"Cache-Control": "no-store"})
+            return JSONResponse(content=_cache["items"][:limit], status_code=200, headers={"Cache-Control": "no-store"})
+        return JSONResponse(content=[], status_code=200, headers={"Cache-Control": "no-store"})
