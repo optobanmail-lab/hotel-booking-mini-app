@@ -9,32 +9,21 @@ function setCssVar(name, valuePx) {
     )
 }
 
-function applyTelegramFlagsAndInsets() {
+function applyTelegramInsets() {
     const webApp = tg()
-    const html = document.documentElement
-
     if (!webApp) {
-        html.removeAttribute('data-tg')
-        html.removeAttribute('data-tg-desktop')
+        document.documentElement.removeAttribute('data-tg')
         setCssVar('--tg-top', 0)
         setCssVar('--tg-bottom', 0)
         return
     }
 
-    html.setAttribute('data-tg', '1')
-
-    const platform = String(webApp.platform || '').toLowerCase()
-    // На ПК обычно "tdesktop"
-    if (platform === 'tdesktop' || platform.includes('desktop')) {
-        html.setAttribute('data-tg-desktop', '1')
-    } else {
-        html.removeAttribute('data-tg-desktop')
-    }
+    document.documentElement.setAttribute('data-tg', '1')
 
     const safe = webApp.safeAreaInset || {}
     const content = webApp.contentSafeAreaInset || {}
 
-    const top = Math.max(safe.top || 0, content.top || 0, 56) // место под кнопки
+    const top = Math.max(safe.top || 0, content.top || 0, 56)
     const bottom = Math.max(safe.bottom || 0, content.bottom || 0)
 
     setCssVar('--tg-top', top)
@@ -43,24 +32,26 @@ function applyTelegramFlagsAndInsets() {
 
 export function initTelegram() {
     const webApp = tg()
-    if (!webApp) {
-        applyTelegramFlagsAndInsets()
-        return
-    }
+    applyTelegramInsets()
+    if (!webApp) return
 
     webApp.ready()
-    webApp.expand()
-    setTimeout(() => webApp.expand(), 250)
 
-    // На старых версиях будет warning — не критично
+    // iOS: expand иногда срабатывает не сразу — делаем несколько попыток
+    const start = Date.now()
+    const id = setInterval(() => {
+        webApp.expand()
+        if (webApp.isExpanded) clearInterval(id)
+        if (Date.now() - start > 2500) clearInterval(id)
+    }, 150)
+
+    // Не критично: на старых версиях Telegram будет warning
     webApp.disableVerticalSwipes?.()
-
-    applyTelegramFlagsAndInsets()
 
     webApp.onEvent?.('viewportChanged', () => {
         webApp.expand()
-        applyTelegramFlagsAndInsets()
+        applyTelegramInsets()
     })
-    webApp.onEvent?.('safeAreaChanged', applyTelegramFlagsAndInsets)
-    webApp.onEvent?.('contentSafeAreaChanged', applyTelegramFlagsAndInsets)
+    webApp.onEvent?.('safeAreaChanged', applyTelegramInsets)
+    webApp.onEvent?.('contentSafeAreaChanged', applyTelegramInsets)
 }

@@ -31,7 +31,9 @@ window.addEventListener('error', (e) => showFatal(e.error || e.message))
 window.addEventListener('unhandledrejection', (e) => showFatal(e.reason))
 
 initTelegram()
-
+if ('scrollRestoration' in history) {
+    history.scrollRestoration = 'manual'
+}
 ReactDOM.createRoot(rootEl).render(
     <BrowserRouter>
         <ThemeProvider theme={theme}>
