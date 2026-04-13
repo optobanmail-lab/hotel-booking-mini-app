@@ -9,21 +9,23 @@ function setCssVar(name, valuePx) {
     )
 }
 
-function applyTelegramInsets() {
+function applyTelegramInsetsAndFlags() {
     const webApp = tg()
+    const html = document.documentElement
+
     if (!webApp) {
-        document.documentElement.removeAttribute('data-tg')
+        html.removeAttribute('data-tg')
         setCssVar('--tg-top', 0)
         setCssVar('--tg-bottom', 0)
         return
     }
 
-    document.documentElement.setAttribute('data-tg', '1')
+    html.setAttribute('data-tg', '1')
 
     const safe = webApp.safeAreaInset || {}
     const content = webApp.contentSafeAreaInset || {}
 
-    // На iOS иногда 0, но кнопки сверху есть → даём фолбэк
+    // На iPhone иногда 0, но сверху кнопки есть → фолбэк 56px
     const top = Math.max(safe.top || 0, content.top || 0, 56)
     const bottom = Math.max(safe.bottom || 0, content.bottom || 0)
 
@@ -32,25 +34,18 @@ function applyTelegramInsets() {
 }
 
 function aggressiveExpand(webApp) {
-    // На iOS expand часто срабатывает не сразу — делаем несколько попыток
+    // iOS часто не expand с первого раза
     const start = Date.now()
     const id = setInterval(() => {
             try {
                 webApp.expand()
             } catch (_) {}
 
-            if (webApp.isExpanded) {
-                clearInterval(id)
-                return
-            }
-
-            if (Date.now() - start > 3500) {
-                clearInterval(id)
-            }
+            if (webApp.isExpanded) clearInterval(id)
+            if (Date.now() - start > 2500) clearInterval(id)
         }, 120)
 
-        // Плюс “контрольные” expand через таймауты
-    ;[100, 250, 600, 1200, 2000].forEach((ms) => {
+    ;[150, 350, 700, 1200].forEach((ms) => {
         setTimeout(() => {
             try {
                 webApp.expand()
@@ -61,22 +56,26 @@ function aggressiveExpand(webApp) {
 
 export function initTelegram() {
     const webApp = tg()
-    applyTelegramInsets()
+    applyTelegramInsetsAndFlags()
     if (!webApp) return
 
     webApp.ready()
 
-    // Максимально разворачиваем
+    // Максимально развернуть
     aggressiveExpand(webApp)
 
-    // На старых версиях будет warning — это ок
+    // Не обязательно, но можно сделать цвета, чтобы выглядело красивее
+    webApp.setHeaderColor?.('#e3eeff')
+    webApp.setBackgroundColor?.('#e3eeff')
+    webApp.setBottomBarColor?.('#ffffff')
+
+    // На старых версиях Telegram может быть warning — это не критично
     webApp.disableVerticalSwipes?.()
 
-    // При любых изменениях viewport снова expand + insets
     webApp.onEvent?.('viewportChanged', () => {
         aggressiveExpand(webApp)
-        applyTelegramInsets()
+        applyTelegramInsetsAndFlags()
     })
-    webApp.onEvent?.('safeAreaChanged', applyTelegramInsets)
-    webApp.onEvent?.('contentSafeAreaChanged', applyTelegramInsets)
+    webApp.onEvent?.('safeAreaChanged', applyTelegramInsetsAndFlags)
+    webApp.onEvent?.('contentSafeAreaChanged', applyTelegramInsetsAndFlags)
 }
