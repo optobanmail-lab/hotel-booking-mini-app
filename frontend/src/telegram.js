@@ -23,11 +23,40 @@ function applyTelegramInsets() {
     const safe = webApp.safeAreaInset || {}
     const content = webApp.contentSafeAreaInset || {}
 
+    // На iOS иногда 0, но кнопки сверху есть → даём фолбэк
     const top = Math.max(safe.top || 0, content.top || 0, 56)
     const bottom = Math.max(safe.bottom || 0, content.bottom || 0)
 
     setCssVar('--tg-top', top)
     setCssVar('--tg-bottom', bottom)
+}
+
+function aggressiveExpand(webApp) {
+    // На iOS expand часто срабатывает не сразу — делаем несколько попыток
+    const start = Date.now()
+    const id = setInterval(() => {
+            try {
+                webApp.expand()
+            } catch (_) {}
+
+            if (webApp.isExpanded) {
+                clearInterval(id)
+                return
+            }
+
+            if (Date.now() - start > 3500) {
+                clearInterval(id)
+            }
+        }, 120)
+
+        // Плюс “контрольные” expand через таймауты
+    ;[100, 250, 600, 1200, 2000].forEach((ms) => {
+        setTimeout(() => {
+            try {
+                webApp.expand()
+            } catch (_) {}
+        }, ms)
+    })
 }
 
 export function initTelegram() {
@@ -37,19 +66,15 @@ export function initTelegram() {
 
     webApp.ready()
 
-    // iOS: expand иногда срабатывает не сразу — делаем несколько попыток
-    const start = Date.now()
-    const id = setInterval(() => {
-        webApp.expand()
-        if (webApp.isExpanded) clearInterval(id)
-        if (Date.now() - start > 2500) clearInterval(id)
-    }, 150)
+    // Максимально разворачиваем
+    aggressiveExpand(webApp)
 
-    // Не критично: на старых версиях Telegram будет warning
+    // На старых версиях будет warning — это ок
     webApp.disableVerticalSwipes?.()
 
+    // При любых изменениях viewport снова expand + insets
     webApp.onEvent?.('viewportChanged', () => {
-        webApp.expand()
+        aggressiveExpand(webApp)
         applyTelegramInsets()
     })
     webApp.onEvent?.('safeAreaChanged', applyTelegramInsets)
