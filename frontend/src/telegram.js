@@ -3,24 +3,38 @@ export function tg() {
 }
 
 function setCssVar(name, valuePx) {
-    document.documentElement.style.setProperty(name, `${Math.max(0, Math.round(valuePx || 0))}px`)
+    document.documentElement.style.setProperty(
+        name,
+        `${Math.max(0, Math.round(valuePx || 0))}px`
+    )
 }
 
-function applyTelegramInsets() {
+function applyTelegramFlagsAndInsets() {
     const webApp = tg()
+    const html = document.documentElement
+
     if (!webApp) {
-        document.documentElement.removeAttribute('data-tg')
+        html.removeAttribute('data-tg')
+        html.removeAttribute('data-tg-desktop')
         setCssVar('--tg-top', 0)
         setCssVar('--tg-bottom', 0)
         return
     }
 
-    document.documentElement.setAttribute('data-tg', '1')
+    html.setAttribute('data-tg', '1')
+
+    const platform = String(webApp.platform || '').toLowerCase()
+    // На ПК обычно "tdesktop"
+    if (platform === 'tdesktop' || platform.includes('desktop')) {
+        html.setAttribute('data-tg-desktop', '1')
+    } else {
+        html.removeAttribute('data-tg-desktop')
+    }
 
     const safe = webApp.safeAreaInset || {}
     const content = webApp.contentSafeAreaInset || {}
 
-    const top = Math.max(safe.top || 0, content.top || 0, 56)
+    const top = Math.max(safe.top || 0, content.top || 0, 56) // место под кнопки
     const bottom = Math.max(safe.bottom || 0, content.bottom || 0)
 
     setCssVar('--tg-top', top)
@@ -29,40 +43,24 @@ function applyTelegramInsets() {
 
 export function initTelegram() {
     const webApp = tg()
-    if (!webApp) return
+    if (!webApp) {
+        applyTelegramFlagsAndInsets()
+        return
+    }
 
     webApp.ready()
-
-    // максимально развернуть
     webApp.expand()
-
-    // иногда помогает, когда Telegram "думает"
     setTimeout(() => webApp.expand(), 250)
 
-    // пробуем настоящий fullscreen (если поддерживается)
-    try {
-        webApp.requestFullscreen?.()
-    } catch (_) {}
-
-    // не критично: на старых версиях будет warning
+    // На старых версиях будет warning — не критично
     webApp.disableVerticalSwipes?.()
 
-    applyTelegramInsets()
+    applyTelegramFlagsAndInsets()
 
     webApp.onEvent?.('viewportChanged', () => {
         webApp.expand()
-        applyTelegramInsets()
+        applyTelegramFlagsAndInsets()
     })
-    webApp.onEvent?.('safeAreaChanged', applyTelegramInsets)
-    webApp.onEvent?.('contentSafeAreaChanged', applyTelegramInsets)
-}
-
-// если захочешь вернуть кнопку — можно вызвать это по клику
-export function requestTelegramFullscreen() {
-    const webApp = tg()
-    if (!webApp) return
-    webApp.expand()
-    try {
-        webApp.requestFullscreen?.()
-    } catch (_) {}
+    webApp.onEvent?.('safeAreaChanged', applyTelegramFlagsAndInsets)
+    webApp.onEvent?.('contentSafeAreaChanged', applyTelegramFlagsAndInsets)
 }
