@@ -18,9 +18,11 @@ body {
   height: 100%;
 }
 
-/* Телефонный формат: (а) обычный браузер на ПК, (б) Telegram Desktop */
-@media (min-width: 900px) {
+/* Телефонный формат ТОЛЬКО на реальных десктопах (мышь) */
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  /* обычный браузер на ПК */
   html:not([data-tg="1"]) #root,
+    /* Telegram Desktop */
   html[data-tg-desktop="1"] #root {
     display: grid;
     place-items: center;
@@ -41,7 +43,7 @@ body {
   }
 }
 
-/* На мобильном Telegram — всегда на весь экран */
+/* На мобильном Telegram — всегда full width/full height */
 html[data-tg="1"]:not([data-tg-desktop="1"]) .phone-frame {
   width: 100% !important;
   max-width: none !important;
